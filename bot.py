@@ -51,7 +51,7 @@ def calculate_mortar(mx: float, my: float, mz: float, tx: float, ty: float, tz: 
     powder_count = 2 if dist <= 350 else math.ceil(dist / 150)
     
     # [실전 캘리브레이션 데이터 룩업 테이블 반영]
-    # 30m = +13.0, 50m = +8.0, 60m = +6.0, 80m = +1.5, 100m = -2.0
+    # 30m = +13.0, 50m = +8.0, 60m = +6.0, 80m = +1.5, 100m = -2.0, 120m = -7.5
     if dist <= 40:
         base_pitch = 13.0 - ((dist - 30) / 20) * 5.0
     elif dist <= 70:
@@ -59,8 +59,8 @@ def calculate_mortar(mx: float, my: float, mz: float, tx: float, ty: float, tz: 
     elif dist <= 100:
         base_pitch = 1.5 - ((dist - 80) / 20) * 3.5
     else:
-        # 100m 초과 원거리 구간
-        base_pitch = -2.0 - ((dist - 100) * 0.18)
+        # 100m 초과 원거리 구간 (120m = -7.5° 매칭 기울기 0.263 적용)
+        base_pitch = -2.0 - ((dist - 100) * 0.263)
 
     # 상하각(Pitch) 무조건 0.5도 단위 반올림
     base_pitch = round(base_pitch * 2) / 2

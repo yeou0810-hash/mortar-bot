@@ -36,57 +36,73 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 # 서버별 영점 및 거리별 커스텀 보정값 저장소
 guild_zeroing_data = {}
 
+# 📌 10m ~ 160m 확정 정밀 사격 룩업 테이블 (화약 개수, 상하각 Pitch)
+BALLISTIC_TABLE = {
+    10:  (1,  16.0),
+    20:  (1,  14.0),
+    30:  (1,  11.0),
+    40:  (1,   8.5),
+    50:  (1,   6.0),
+    60:  (1,   2.5),
+    70:  (2,   4.0),
+    80:  (2,   2.5),
+    90:  (2,  -0.5),
+    100: (2,  -2.0),
+    110: (2,  -5.5),
+    120: (2,  -7.5),
+    130: (2, -12.5),
+    140: (2, -15.0),
+    150: (2, -18.0),
+    160: (2, -20.0),
+}
+
 def calculate_mortar(mx: float, my: float, mz: float, tx: float, ty: float, tz: float, guild_id: int = 0):
-    dx = tx - mx  # X축 (전진 거리)
-    dz = tz - mz  # Z축 (좌우 편차)
+    dx = tx - mx  # X축 전진 거리
+    dz = tz - mz  # Z축 좌우 편차
     dy = ty - my
 
     # 평면 거리 계산
     dist = math.sqrt(dx * dx + dz * dz)
 
-    # [좌우각(Yaw) 계산] X축 전진, Z축 좌우 편차 기준
+    # [좌우각(Yaw) 계산] 플러그인 제한 범위 (-45.0 ~ +45.0) 적용 및 0.5도 단위 반올림
     if dx == 0:
         raw_yaw = 45.0 if dz > 0 else -45.0
     else:
         raw_yaw = math.degrees(math.atan2(dz, dx))
 
-    # 플러그인 제한 범위 (-45.0 ~ +45.0) 적용 및 0.5도 단위 반올림
     yaw = max(-45.0, min(45.0, raw_yaw))
     yaw = round(round(yaw * 2) / 2, 1)
 
-    powder_count = 2 if dist <= 350 else math.ceil(dist / 150)
-    
     # 서버별 커스텀 영점(학습된 값)이 있는지 확인 (±2m 이내 구간 적용)
     server_data = guild_zeroing_data.get(guild_id, {})
     custom_pitches = server_data.get("custom_pitches", {})
     
     applied_custom = False
     base_pitch = 0.0
+    powder_count = 1
     
     for d, p in custom_pitches.items():
         if abs(dist - d) <= 2.0:
             base_pitch = p
             applied_custom = True
             break
-            
-    # 커스텀 값이 없다면 기존 기본 룩업 테이블 공식 적용
+
+    # 커스텀 값이 없다면 가장 가까운 10m 단위 룩업 테이블 적용
     if not applied_custom:
-        if dist <= 40:
-            base_pitch = 13.0 - ((dist - 30) / 20) * 5.0
-        elif dist <= 70:
-            base_pitch = 8.0 - ((dist - 50) / 30) * 6.5
-        elif dist <= 100:
-            base_pitch = 1.5 - ((dist - 80) / 20) * 3.5
-        else:
-            # 100m 초과 원거리 구간 (120m = -7.5° 매칭 기울기 0.263)
-            base_pitch = -2.0 - ((dist - 100) * 0.263)
+        rounded_table_dist = int(round(dist / 10.0) * 10)
+        if rounded_table_dist < 10:
+            rounded_table_dist = 10
+        elif rounded_table_dist > 160:
+            rounded_table_dist = 160
+        
+        powder_count, base_pitch = BALLISTIC_TABLE[rounded_table_dist]
 
-        # 상하각(Pitch) 무조건 0.5도 단위 반올림
-        base_pitch = round(base_pitch * 2) / 2
-
-    # 고저차(Y축) 보정 (0.5도 단위 적용)
+    # 고저차(Y축) 보정 적용 (0.5도 단위 반올림)
     elevation_correction = (dy / max(dist, 1)) * 5
     final_pitch = round((base_pitch + elevation_correction) * 2) / 2
+
+    # 시스템 한계치 강제 보호 (-20° ~ +20°)
+    final_pitch = max(-20.0, min(20.0, final_pitch))
 
     return {
         "dist": round(dist, 1), 

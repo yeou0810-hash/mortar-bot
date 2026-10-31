@@ -3,7 +3,28 @@ from discord.ext import commands
 from discord import app_commands
 import math
 import os
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
+# 1. 렌더(Render) 포트 감지용 간단한 웹 서버 (Timed Out 방지용)
+class SimpleHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot is alive!")
+    def log_message(self, format, *args):
+        pass # 로그가 너무 많이 쌓이는 것을 방지
+
+def run_web_server():
+    port = int(os.getenv("PORT", 10000))
+    server = HTTPServer(("0.0.0.0", port), SimpleHandler)
+    server.serve_forever()
+
+# 백그라운드에서 웹 서버 실행
+threading.Thread(target=run_web_server, daemon=True).start()
+
+
+# 2. 디스코드 봇 설정
 TOKEN = os.getenv("DISCORD_TOKEN")
 
 intents = discord.Intents.default()

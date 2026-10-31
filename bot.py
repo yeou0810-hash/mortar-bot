@@ -4,7 +4,7 @@ from discord import app_commands
 import math
 import os
 
-TOKEN = os.getenv("DISCORD_TOKEN", "MTU2NTkxNjUzOTkwMTcxNDQ4NA.GpbWpp.0jyrGgLUj82ZzI8jviGPeHg2pmUTmipH06bE-g")
+TOKEN = os.getenv("DISCORD_TOKEN")
 
 intents = discord.Intents.default()
 intents.message_content = True

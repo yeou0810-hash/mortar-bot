@@ -31,20 +31,18 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 guild_zeroing_data = {}
 
 def calculate_mortar(mx: float, my: float, mz: float, tx: float, ty: float, tz: float, dist_offset: float = 0.0, yaw_offset: float = 0.0):
-    dx = tx - mx
+    dx = tx - mx  # X축 (전진 거리)
+    dz = tz - mz  # Z축 (좌우 편차)
     dy = ty - my
-    dz = tz - mz
 
     # 평면 거리 계산
     dist = math.sqrt(dx * dx + dz * dz) + dist_offset
 
-    # [좌우각(Yaw) 계산 보정]
-    # dz(Z축 이동)를 정면 축으로 잡고, dx(X축 이동)의 좌우 편차각을 계산
-    if dz == 0:
-        raw_yaw = 45.0 if dx > 0 else -45.0
+    # [좌우각(Yaw) 계산 수정] X축이 정면, Z축이 좌우일 때의 편차각 계산
+    if dx == 0:
+        raw_yaw = 45.0 if dz > 0 else -45.0
     else:
-        # atan2(dx, dz)로 정면(0도) 기준 좌우 편차각 산출
-        raw_yaw = math.degrees(math.atan2(dx, dz)) + yaw_offset
+        raw_yaw = math.degrees(math.atan2(dz, dx)) + yaw_offset
 
     # 플러그인 제한 범위 (-45.0 ~ +45.0) 적용 및 소수점 1자리 정제
     yaw = max(-45.0, min(45.0, raw_yaw))

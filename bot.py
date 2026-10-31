@@ -38,21 +38,19 @@ def calculate_mortar(mx: float, my: float, mz: float, tx: float, ty: float, tz: 
     # 평면 거리 계산
     dist = math.sqrt(dx * dx + dz * dz) + dist_offset
 
-    # [좌우각(Yaw) 계산] X축 전진, Z축 좌우 편차
+    # [좌우각(Yaw) 계산] X축 전진, Z축 좌우 편차 기준
     if dx == 0:
         raw_yaw = 45.0 if dz > 0 else -45.0
     else:
         raw_yaw = math.degrees(math.atan2(dz, dx)) + yaw_offset
 
-    # 플러그인 제한 범위 (-45.0 ~ +45.0) 적용
+    # 플러그인 제한 범위 (-45.0 ~ +45.0) 적용 및 0.5도 단위 반올림
     yaw = max(-45.0, min(45.0, raw_yaw))
-    
-    # ⭐ [핵심] 좌우각도 무조건 0.5도 단위로 반올림 (예: 12.2 -> 12.0 또는 12.5)
     yaw = round(round(yaw * 2) / 2, 1)
 
     powder_count = 2 if dist <= 350 else math.ceil(dist / 150)
     
-    # [실전 데이터 룩업 테이블 반영]
+    # [실전 캘리브레이션 데이터 룩업 테이블 반영]
     # 30m = +13.0, 50m = +8.0, 60m = +6.0, 80m = +1.5, 100m = -2.0
     if dist <= 40:
         base_pitch = 13.0 - ((dist - 30) / 20) * 5.0
@@ -61,10 +59,10 @@ def calculate_mortar(mx: float, my: float, mz: float, tx: float, ty: float, tz: 
     elif dist <= 100:
         base_pitch = 1.5 - ((dist - 80) / 20) * 3.5
     else:
-        # 100m 초과 원거리 (100m = -2.0 기준에서 거리당 완만하게 하강)
+        # 100m 초과 원거리 구간
         base_pitch = -2.0 - ((dist - 100) * 0.18)
 
-    # ⭐ [핵심] 상하각도 무조건 0.5도 단위로 반올림
+    # 상하각(Pitch) 무조건 0.5도 단위 반올림
     base_pitch = round(base_pitch * 2) / 2
 
     # 고저차(Y축) 보정 (0.5도 단위 적용)

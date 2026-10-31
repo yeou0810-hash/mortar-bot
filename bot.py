@@ -1,18 +1,22 @@
 import discord
 from discord.ext import commands
-from discord.app_commands import Choice
 from discord import app_commands
 import math
 import os
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-# 렌더 포트 유지용 웹 서버 (타임아웃 방지)
+# 렌더 포트 유지용 웹 서버 (타임아웃 방지 + HEAD 요청 완벽 대응)
 class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
         self.wfile.write(b"Bot is alive!")
+        
+    def do_HEAD(self):  # UptimeRobot 상태 체크 대응
+        self.send_response(200)
+        self.end_headers()
+
     def log_message(self, format, *args):
         pass
 
@@ -30,7 +34,6 @@ intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # 서버별 영점 및 거리별 커스텀 보정값 저장소
-# 구조: { guild_id: { "custom_pitches": { 120: -8.0, ... } } }
 guild_zeroing_data = {}
 
 def calculate_mortar(mx: float, my: float, mz: float, tx: float, ty: float, tz: float, guild_id: int = 0):

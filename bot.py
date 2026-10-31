@@ -35,41 +35,46 @@ def calculate_mortar(mx: float, my: float, mz: float, tx: float, ty: float, tz: 
     dy = ty - my
     dz = tz - mz
 
+    # 평면 거리 계산
     dist = math.sqrt(dx * dx + dz * dz) + dist_offset
-    yaw = math.degrees(math.atan2(-dx, dz)) + yaw_offset
-    
-    if yaw > 180: yaw -= 360
-    elif yaw < -180: yaw += 360
+
+    # [좌우각(Yaw) 계산 보정]
+    # dz(Z축 이동)를 정면 축으로 잡고, dx(X축 이동)의 좌우 편차각을 계산
+    if dz == 0:
+        raw_yaw = 45.0 if dx > 0 else -45.0
+    else:
+        # atan2(dx, dz)로 정면(0도) 기준 좌우 편차각 산출
+        raw_yaw = math.degrees(math.atan2(dx, dz)) + yaw_offset
+
+    # 플러그인 제한 범위 (-45.0 ~ +45.0) 적용 및 소수점 1자리 정제
+    yaw = max(-45.0, min(45.0, raw_yaw))
     yaw = round(yaw, 1)
 
     powder_count = 2 if dist <= 350 else math.ceil(dist / 150)
     
-    # [우리가 직접 검증한 실전 캘리브레이션 데이터 반영]
+    # [실전 데이터 룩업 테이블 반영]
     # 30m = +13.0, 50m = +8.0, 60m = +6.0, 80m = +1.5, 100m = -2.0
-    # 마인크래프트 포물선 곡률과 0.5도 단위 제약을 만족하는 정밀 보간 공식 적용
     if dist <= 40:
-        # 30m~50m 구간 보간
         base_pitch = 13.0 - ((dist - 30) / 20) * 5.0
     elif dist <= 70:
-        # 50m~60m, 60m~80m 구간 부드러운 연결
         base_pitch = 8.0 - ((dist - 50) / 30) * 6.5
     elif dist <= 100:
-        # 80m~100m 구간 보간
         base_pitch = 1.5 - ((dist - 80) / 20) * 3.5
     else:
-        # 100m 초과 원거리 기본 선형 추정
         base_pitch = -2.0 - ((dist - 100) * 0.175)
 
-    # 0.5도 단위로 반올림 (플러그인 필수 조건)
+    # 0.5도 단위 반올림
     base_pitch = round(base_pitch * 2) / 2
 
-    # 고저차 반영 (Y축 오차 보정)
+    # 고저차(Y축) 보정
     elevation_correction = (dy / max(dist, 1)) * 5
     final_pitch = round((base_pitch + elevation_correction) * 2) / 2
 
     return {
-        "dist": round(dist, 1), "yaw": yaw,
-        "pitch": final_pitch, "powder": powder_count
+        "dist": round(dist, 1), 
+        "yaw": yaw,
+        "pitch": final_pitch, 
+        "powder": powder_count
     }
 
 @bot.event
@@ -81,7 +86,7 @@ async def on_ready():
     except Exception as e:
         print(f"❌ 동기화 실패: {e}")
 
-@bot.tree.command(name="박격포", description="실전 데이터가 반영된 PlanetEarth 박격포 사격 제원을 계산합니다.")
+@bot.tree.command(name="박격포", description="PlanetEarth 맞춤형 박격포 사격 제원을 계산합니다.")
 @app_commands.describe(mx="내 X", mz="내 Z", tx="적 X", tz="적 Z", my="내 Y (기본 64)", ty="적 Y (기본 64)")
 async def mortar_slash(interaction: discord.Interaction, mx: float, mz: float, tx: float, tz: float, my: float = 64.0, ty: float = 64.0):
     guild_id = interaction.guild.id if interaction.guild else 0
@@ -89,12 +94,12 @@ async def mortar_slash(interaction: discord.Interaction, mx: float, mz: float, t
     
     res = calculate_mortar(mx, my, mz, tx, ty, tz, server_zero["dist_offset"], server_zero["yaw_offset"])
 
-    embed = discord.Embed(title="🚀 PlanetEarth 실전 맞춤형 박격포 제원", color=discord.Color.blue())
+    embed = discord.Embed(title="🚀 PlanetEarth 박격포 사격 제원", color=discord.Color.blue())
     embed.add_field(name="📏 측정 거리", value=f"`{res['dist']}m`", inline=True)
-    embed.add_field(name="💣 화약 개수", value=f"화약 **{res['powder']}개** / TNT **1개**", inline=True)
+    embed.add_field(name="💣 장약 제원", value=f"화약 **{res['powder']}개** / TNT **1개**", inline=True)
     
     sign_text = f"p: {res['powder']} c: TNT\n{res['yaw']}/{res['pitch']}"
-    embed.add_field(name="📝 표지판 입력 값 (좌우/각도)", value=f"```\n{sign_text}\n```", inline=False)
+    embed.add_field(name="📝 표지판 입력 값", value=f"```\n{sign_text}\n```", inline=False)
 
     await interaction.response.send_message(embed=embed)
 

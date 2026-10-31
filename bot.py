@@ -6,25 +6,22 @@ import os
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-# 1. 렌더(Render) 포트 감지용 간단한 웹 서버 (Timed Out 방지용)
+# 렌더 포트 유지용 웹 서버 (타임아웃 방지)
 class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
         self.wfile.write(b"Bot is alive!")
     def log_message(self, format, *args):
-        pass # 로그가 너무 많이 쌓이는 것을 방지
+        pass
 
 def run_web_server():
     port = int(os.getenv("PORT", 10000))
     server = HTTPServer(("0.0.0.0", port), SimpleHandler)
     server.serve_forever()
 
-# 백그라운드에서 웹 서버 실행
 threading.Thread(target=run_web_server, daemon=True).start()
 
-
-# 2. 디스코드 봇 설정
 TOKEN = os.getenv("DISCORD_TOKEN")
 
 intents = discord.Intents.default()
@@ -45,29 +42,34 @@ def calculate_mortar(mx: float, my: float, mz: float, tx: float, ty: float, tz: 
     elif yaw < -180: yaw += 360
     yaw = round(yaw, 1)
 
-    if -22.5 <= yaw < 22.5: dir_str = "남(S)"
-    elif 22.5 <= yaw < 67.5: dir_str = "남서(SW)"
-    elif 67.5 <= yaw < 112.5: dir_str = "서(W)"
-    elif 112.5 <= yaw < 157.5: dir_str = "북서(NW)"
-    elif -67.5 <= yaw < -22.5: dir_str = "남동(SE)"
-    elif -112.5 <= yaw < -67.5: dir_str = "동(E)"
-    elif -157.5 <= yaw < -112.5: dir_str = "북동(NE)"
-    else: dir_str = "북(N)"
-
     powder_count = 2 if dist <= 350 else math.ceil(dist / 150)
-    tnt_count = 1
+    
+    # [우리가 직접 검증한 실전 캘리브레이션 데이터 반영]
+    # 30m = +13.0, 50m = +8.0, 60m = +6.0, 80m = +1.5, 100m = -2.0
+    # 마인크래프트 포물선 곡률과 0.5도 단위 제약을 만족하는 정밀 보간 공식 적용
+    if dist <= 40:
+        # 30m~50m 구간 보간
+        base_pitch = 13.0 - ((dist - 30) / 20) * 5.0
+    elif dist <= 70:
+        # 50m~60m, 60m~80m 구간 부드러운 연결
+        base_pitch = 8.0 - ((dist - 50) / 30) * 6.5
+    elif dist <= 100:
+        # 80m~100m 구간 보간
+        base_pitch = 1.5 - ((dist - 80) / 20) * 3.5
+    else:
+        # 100m 초과 원거리 기본 선형 추정
+        base_pitch = -2.0 - ((dist - 100) * 0.175)
 
-    if dist < 100: base_angle = 75
-    elif dist < 200: base_angle = 60
-    elif dist > 400: base_angle = 35
-    else: base_angle = 45
+    # 0.5도 단위로 반올림 (플러그인 필수 조건)
+    base_pitch = round(base_pitch * 2) / 2
 
-    elevation_correction = round((dy / max(dist, 1)) * 15)
-    final_pitch = min(85, max(10, base_angle + elevation_correction))
+    # 고저차 반영 (Y축 오차 보정)
+    elevation_correction = (dy / max(dist, 1)) * 5
+    final_pitch = round((base_pitch + elevation_correction) * 2) / 2
 
     return {
-        "dist": round(dist, 1), "yaw": yaw, "dir_str": dir_str,
-        "pitch": final_pitch, "powder": powder_count, "tnt": tnt_count
+        "dist": round(dist, 1), "yaw": yaw,
+        "pitch": final_pitch, "powder": powder_count
     }
 
 @bot.event
@@ -79,7 +81,7 @@ async def on_ready():
     except Exception as e:
         print(f"❌ 동기화 실패: {e}")
 
-@bot.tree.command(name="박격포", description="플래닛어스 박격포 사격 제원을 계산합니다.")
+@bot.tree.command(name="박격포", description="실전 데이터가 반영된 PlanetEarth 박격포 사격 제원을 계산합니다.")
 @app_commands.describe(mx="내 X", mz="내 Z", tx="적 X", tz="적 Z", my="내 Y (기본 64)", ty="적 Y (기본 64)")
 async def mortar_slash(interaction: discord.Interaction, mx: float, mz: float, tx: float, tz: float, my: float = 64.0, ty: float = 64.0):
     guild_id = interaction.guild.id if interaction.guild else 0
@@ -87,24 +89,13 @@ async def mortar_slash(interaction: discord.Interaction, mx: float, mz: float, t
     
     res = calculate_mortar(mx, my, mz, tx, ty, tz, server_zero["dist_offset"], server_zero["yaw_offset"])
 
-    embed = discord.Embed(title="🚀 PlanetEarth 박격포 사격 제원", color=discord.Color.blue())
-    embed.add_field(name="📏 보정된 거리", value=f"`{res['dist']}m`", inline=True)
-    embed.add_field(name="🧭 보정된 방위각 (Yaw)", value=f"`{res['yaw']}°` ({res['dir_str']})", inline=True)
-    embed.add_field(name="📐 표지판 각도 (Pitch)", value=f"`{res['pitch']}°`", inline=True)
-    embed.add_field(name="💣 장전 추천", value=f"화약 **{res['powder']}개** / TNT **{res['tnt']}개**", inline=False)
+    embed = discord.Embed(title="🚀 PlanetEarth 실전 맞춤형 박격포 제원", color=discord.Color.blue())
+    embed.add_field(name="📏 측정 거리", value=f"`{res['dist']}m`", inline=True)
+    embed.add_field(name="💣 화약 개수", value=f"화약 **{res['powder']}개** / TNT **1개**", inline=True)
+    
+    sign_text = f"p: {res['powder']} c: TNT\n{res['yaw']}/{res['pitch']}"
+    embed.add_field(name="📝 표지판 입력 값 (좌우/각도)", value=f"```\n{sign_text}\n```", inline=False)
 
     await interaction.response.send_message(embed=embed)
-
-@bot.tree.command(name="영점", description="이 서버 전체에 적용될 탄착군 오차를 입력해 고정합니다.")
-@app_commands.describe(dist_offset="거리 오차", yaw_offset="방향 오차")
-async def set_zero(interaction: discord.Interaction, dist_offset: float = 0.0, yaw_offset: float = 0.0):
-    if not interaction.guild:
-        await interaction.response.send_message("❌ 서버 내에서만 사용 가능합니다.", ephemeral=True)
-        return
-
-    guild_id = interaction.guild.id
-    guild_zeroing_data[guild_id] = {"dist_offset": dist_offset, "yaw_offset": yaw_offset}
-    
-    await interaction.response.send_message(f"🎯 영점 설정 완료! 거리 보정: `{dist_offset}m` / 방향 보정: `{yaw_offset}°`", ephemeral=True)
 
 bot.run(TOKEN)

@@ -4,6 +4,7 @@ from discord import app_commands
 import math
 import os
 import threading
+from typing import Optional
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 # 렌더 포트 유지용 웹 서버 (타임아웃 방지 + HEAD 요청 완벽 대응)
@@ -122,10 +123,29 @@ async def on_ready():
         print(f"❌ 동기화 실패: {e}")
 
 @bot.tree.command(name="박격포", description="PlanetEarth 맞춤형 박격포 사격 제원을 계산합니다.")
-@app_commands.describe(mx="내 X", mz="내 Z", tx="적 X", tz="적 Z", my="내 Y (기본 64)", ty="적 Y (기본 64)")
-async def mortar_slash(interaction: discord.Interaction, mx: float, mz: float, tx: float, tz: float, my: float = 64.0, ty: float = 64.0):
+@app_commands.describe(
+    mx="내 X 좌표", 
+    mz="내 Z 좌표", 
+    tx="적 X 좌표", 
+    tz="적 Z 좌표", 
+    my="내 Y 좌표 (선택사항, 입력 안 하면 64)", 
+    ty="적 Y 좌표 (선택사항, 입력 안 하면 64)"
+)
+async def mortar_slash(
+    interaction: discord.Interaction, 
+    mx: float, 
+    mz: float, 
+    tx: float, 
+    tz: float, 
+    my: Optional[float] = None, 
+    ty: Optional[float] = None
+):
+    # Y 좌표를 입력하지 않았다면 기본값 64.0으로 자동 지정
+    real_my = my if my is not None else 64.0
+    real_ty = ty if ty is not None else 64.0
+
     guild_id = interaction.guild.id if interaction.guild else 0
-    res = calculate_mortar(mx, my, mz, tx, ty, tz, guild_id)
+    res = calculate_mortar(mx, real_my, mz, tx, real_ty, tz, guild_id)
 
     embed = discord.Embed(title="🚀 PlanetEarth 박격포 사격 제원", color=discord.Color.blue())
     embed.add_field(name="📏 측정 거리", value=f"`{res['dist']}m`", inline=True)

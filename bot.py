@@ -126,9 +126,9 @@ async def on_ready():
 @app_commands.describe(
     mx="내 X 좌표", 
     mz="내 Z 좌표", 
+    my="내 Y 좌표 (선택사항, 입력 안 하면 64)", 
     tx="적 X 좌표", 
     tz="적 Z 좌표", 
-    my="내 Y 좌표 (선택사항, 입력 안 하면 64)", 
     ty="적 Y 좌표 (선택사항, 입력 안 하면 64)"
 )
 async def mortar_slash(
@@ -157,21 +157,4 @@ async def mortar_slash(
     sign_text = f"p: {res['powder']} c: TNT\n{res['yaw']}/{res['pitch']}"
     embed.add_field(name="📝 표지판 입력 값", value=f"```\n{sign_text}\n```", inline=False)
 
-    await interaction.response.send_message(embed=embed)
-
-@bot.tree.command(name="영점설정", description="특정 거리의 상하각 오차를 직접 수정하여 서버에 영점을 학습시킵니다.")
-@app_commands.describe(distance="보정할 대략적 거리 (예: 120)", target_pitch="실제 명중하는 올바른 상하각 (예: -8.0)")
-async def set_zeroing(interaction: discord.Interaction, distance: float, target_pitch: float):
-    guild_id = interaction.guild.id if interaction.guild else 0
-    
-    if guild_id not in guild_zeroing_data:
-        guild_zeroing_data[guild_id] = {"custom_pitches": {}}
-    if "custom_pitches" not in guild_zeroing_data[guild_id]:
-        guild_zeroing_data[guild_id]["custom_pitches"] = {}
-        
-    rounded_dist = round(distance)
-    guild_zeroing_data[guild_id]["custom_pitches"][rounded_dist] = target_pitch
-    
-    await interaction.response.send_message(f"✅ **{rounded_dist}m** 부근의 상하각 영점이 **`{target_pitch}°`**(으)로 서버에 학습(저장)되었습니다! 이제부터 해당 거리에서 이 값이 우선 적용됩니다.")
-
-bot.run(TOKEN)
+    await interaction.response.send_message(embed

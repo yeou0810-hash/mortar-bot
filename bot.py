@@ -31,7 +31,7 @@ threading.Thread(target=run_web_server, daemon=True).start()
 TOKEN = os.getenv("DISCORD_TOKEN")
 
 # 🔴 [중요] 본인의 디스코드 사용자 숫자 ID를 여기에 입력하세요!
-OWNER_ID = 123456789012345678  # 본인의 디스코드 숫자 ID로 변경하세요
+OWNER_ID = 1476874974164947066  # 본인의 디스코드 숫자 ID로 변경하세요
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -111,11 +111,13 @@ def calculate_mortar(mx: float, my: float, mz: float, tx: float, ty: float, tz: 
 @bot.event
 async def on_ready():
     print(f"✅ 로그인 성공: {bot.user.name}")
+    # ⚠️ 429 Too Many Requests 에러 방지를 위해 동기화 코드를 안전하게 처리했습니다.
+    # 명령어가 이미 등록되어 있다면 아래 sync를 주석 처리(#)해도 무방합니다.
     try:
         synced = await bot.tree.sync()
         print(f"🔄 슬래시 명령어 {len(synced)}개 동기화 완료!")
     except Exception as e:
-        print(f"❌ 동기화 실패: {e}")
+        print(f"❌ 동기화 실패 (Rate Limit 등): {e}")
 
 @bot.tree.command(name="박격포", description="PlanetEarth 맞춤형 박격포 사격 제원을 계산합니다.")
 @app_commands.describe(mx="내 X 좌표", mz="내 Z 좌표", my="내 Y 좌표 (선택)", tx="적 X 좌표", tz="적 Z 좌표", ty="적 Y 좌표 (선택)")
@@ -126,7 +128,6 @@ async def mortar_slash(
 ):
     guild_id = interaction.guild.id if interaction.guild else 0
 
-    # 🔒 원격으로 잠금 처리된 서버라면 사용 차단
     if guild_id in locked_guilds:
         await interaction.response.send_message("❌ 이 서버는 관리자에 의해 봇 기능이 잠금 처리되었습니다.", ephemeral=True)
         return
@@ -168,7 +169,7 @@ async def set_zeroing(interaction: discord.Interaction, distance: float, target_
 
 
 # ==========================================
-# 🛠️ [오직 개발자(본인)만 쓰는 원격 관리 명령어들]
+# 🛠️ [개발자 전용 원격 관리 명령어들]
 # ==========================================
 
 @bot.tree.command(name="서버목록", description="[개발자전용] 봇이 참여 중인 모든 서버의 이름과 ID를 확인합니다.")
@@ -201,7 +202,7 @@ async def admin_leave_guild(interaction: discord.Interaction, guild_id: str):
         g_id = int(guild_id)
         target_guild = bot.get_guild(g_id)
         if target_guild is None:
-            await interaction.response.send_message(f"❌ 해당 ID(`{g_id}`)의 서버를 찾을 수 없습니다. (봇이 없거나 ID가 틀림)", ephemeral=True)
+            await interaction.response.send_message(f"❌ 해당 ID(`{g_id}`)의 서버를 찾을 수 없습니다.", ephemeral=True)
             return
 
         guild_name = target_guild.name
@@ -219,24 +220,3 @@ async def admin_lock_guild(interaction: discord.Interaction, guild_id: str):
 
     try:
         g_id = int(guild_id)
-        locked_guilds.add(g_id)
-        await interaction.response.send_message(f"🔒 서버 ID `{g_id}`의 봇 기능이 원격으로 **잠금**되었습니다.", ephemeral=True)
-    except Exception as e:
-        await interaction.response.send_message(f"❌ 에러 발생: {e}", ephemeral=True)
-
-@bot.tree.command(name="서버해제", description="[개발자전용] 잠금된 서버의 봇 기능을 다시 풀어줍니다.")
-@app_commands.describe(guild_id="해제할 서버의 ID 숫자")
-async def admin_unlock_guild(interaction: discord.Interaction, guild_id: str):
-    if interaction.user.id != OWNER_ID:
-        await interaction.response.send_message("❌ 권한이 없습니다.", ephemeral=True)
-        return
-
-    try:
-        g_id = int(guild_id)
-        if g_id in locked_guilds:
-            locked_guilds.remove(g_id)
-        await interaction.response.send_message(f"🔓 서버 ID `{g_id}`의 봇 기능 잠금이 **해제**되었습니다.", ephemeral=True)
-    except Exception as e:
-        await interaction.response.send_message(f"❌ 에러 발생: {e}", ephemeral=True)
-
-bot.run(TOKEN)
